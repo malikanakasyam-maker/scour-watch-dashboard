@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scour Watch — Foundation Telemetry Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    --bg: #F1ECDD;
+    --paper: #FBF8EF;
+    --panel: #FFFFFF;
+    --ink: #16283D;
+    --ink-soft: #46586e;
+    --line: #D8CFAE;
+    --water: #2E7D93;
+    --water-fill: rgba(46,125,147,0.12);
+    --sediment: #B5651D;
+    --sediment-fill: rgba(181,101,29,0.14);
+    --alert: #C43B2B;
+    --alert-fill: rgba(196,59,43,0.12);
+    --muted: #7a7259;
+    --radius: 3px;
+  }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  * { box-sizing: border-box; }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101b29;
+      --paper: #16283D;
+      --panel: #182b40;
+      --ink: #EDE6D6;
+      --ink-soft: #b9c4d3;
+      --line: #2b425e;
+      --water: #6FD3E8;
+      --water-fill: rgba(111,211,232,0.10);
+      --sediment: #E0A458;
+      --sediment-fill: rgba(224,164,88,0.14);
+      --alert: #FF6B52;
+      --alert-fill: rgba(255,107,82,0.14);
+      --muted: #8fa0b6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101b29;
+    --paper: #16283D;
+    --panel: #182b40;
+    --ink: #EDE6D6;
+    --ink-soft: #b9c4d3;
+    --line: #2b425e;
+    --water: #6FD3E8;
+    --water-fill: rgba(111,211,232,0.10);
+    --sediment: #E0A458;
+    --sediment-fill: rgba(224,164,88,0.14);
+    --alert: #FF6B52;
+    --alert-fill: rgba(255,107,82,0.14);
+    --muted: #8fa0b6;
+  }
+
+  html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px);
+  }
+
+  .wrap {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 28px 20px 60px;
+  }
+
+  /* ---------- header ---------- */
+  header.top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 18px;
+    margin-bottom: 22px;
+  }
+  .brand h1 {
+    font-family: "Spectral", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 38px);
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .brand p {
+    margin: 0;
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    max-width: 46ch;
+    line-height: 1.5;
+  }
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 7px 14px 7px 10px;
+    background: var(--paper);
+    white-space: nowrap;
+  }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--water);
+    box-shadow: 0 0 0 3px var(--water-fill);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: .45; } }
+
+  /* ---------- emergency banner ---------- */
+  #banner {
+    display: none;
+    align-items: center;
+    gap: 14px;
+    border: 1px solid var(--alert);
+    background: var(--alert-fill);
+    color: var(--alert);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 14px;
+  }
+  #banner.live { display: flex; animation: flash 1.1s steps(2, start) infinite; }
+  @keyframes flash { 50% { background: transparent; } }
+  #banner strong { font-weight: 600; }
+  .banner-icon { font-size: 18px; line-height: 1; }
+
+  /* ---------- layout grid ---------- */
+  .grid {
+    display: grid;
+    grid-template-columns: 1.6fr 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 860px) {
+    .grid { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+  }
+  .panel + .panel { margin-top: 20px; }
+  .panel h2 {
+    font-family: "Spectral", Georgia, serif;
+    font-weight: 500;
+    font-size: 17px;
+    margin: 0 0 14px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .panel h2 span.sub {
+    font-family: "IBM Plex Mono", monospace;
+    font-weight: 400;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+
+  /* ---------- chart ---------- */
+  #chartCanvas { width: 100%; display: block; }
+  .legend {
+    display: flex; gap: 18px; margin-top: 10px; flex-wrap: wrap;
+    font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--ink-soft);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 3px; border-radius: 2px; display: inline-block; }
+
+  /* ---------- readouts ---------- */
+  .readouts {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .readout {
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 10px 12px;
+    background: var(--paper);
+  }
+  .readout .label {
+    font-size: 11.5px; color: var(--muted);
+    margin-bottom: 4px;
+  }
+  .readout .value {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 21px;
+    font-weight: 500;
+  }
+  .readout .value.water { color: var(--water); }
+  .readout .value.sediment { color: var(--sediment); }
+  .readout .value.alert { color: var(--alert); }
+  .readout .unit { font-size: 12px; color: var(--muted); margin-left: 3px; }
+
+  .safety-bar {
+    margin-top: 4px;
+    height: 8px;
+    border-radius: 4px;
+    background: var(--line);
+    overflow: hidden;
+  }
+  .safety-fill {
+    height: 100%;
+    width: 100%;
+    background: var(--water);
+    transition: width .5s ease, background .5s ease;
+  }
+
+  /* ---------- controls ---------- */
+  label.field {
+    display: block;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+    margin-bottom: 6px;
+  }
+  select, input[type="range"] {
+    width: 100%;
+  }
+  select {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .control-row { margin-bottom: 16px; }
+  .control-row:last-child { margin-bottom: 0; }
+  .range-value {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    color: var(--water);
+    float: right;
+  }
+  input[type="range"] {
+    accent-color: var(--water);
+  }
+
+  .btn-row { display: flex; gap: 8px; margin-top: 16px; }
+  button {
+    font-family: "IBM Plex Sans", sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    padding: 9px 14px;
+    border-radius: var(--radius);
+    border: 1px solid var(--line);
+    background: var(--paper);
+    color: var(--ink);
+    cursor: pointer;
+    flex: 1;
+  }
+  button:hover { border-color: var(--water); }
+  button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  button.danger {
+    color: var(--alert);
+    border-color: var(--alert);
+  }
+  button:focus-visible, select:focus-visible, input:focus-visible {
+    outline: 2px solid var(--water);
+    outline-offset: 2px;
+  }
+
+  /* ---------- equation card ---------- */
+  .eq {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 13px;
+    line-height: 1.9;
+    color: var(--ink-soft);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    overflow-x: auto;
+  }
+  .eq .hi { color: var(--sediment); font-weight: 500; }
+  .footnote {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+    line-height: 1.6;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-dot, #banner.live { animation: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div class="brand">
+      <h1>Scour Watch</h1>
+      <p>Simulated telemetry from the flume rig — foundation sinking depth and flow velocity, run through the CSU pier-scour equation in real time.</p>
+    </div>
+    <div class="status-pill"><span class="status-dot"></span><span id="statusText">Simulation running · t = 0s</span></div>
+  </header>
+
+  <div id="banner">
+    <span class="banner-icon">▲</span>
+    <span><strong>Emergency threshold crossed —</strong> <span id="bannerDetail">scour depth has consumed the foundation's embedment margin. Structural collapse risk is imminent.</span></span>
+  </div>
+
+  <div class="grid">
+    <!-- LEFT: chart + equation -->
+    <div>
+      <div class="panel">
+        <h2>Flow velocity vs. foundation sinking depth <span class="sub">last 120s, updated 1×/s</span></h2>
+        <canvas id="chartCanvas" height="280"></canvas>
+        <div class="legend">
+          <span><i class="swatch" style="background:var(--water)"></i>Flow velocity (m/s)</span>
+          <span><i class="swatch" style="background:var(--sediment)"></i>Measured sinking depth (cm)</span>
+          <span><i class="swatch" style="background:var(--alert); opacity:.7"></i>Embedment limit</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Predictive engine <span class="sub">CSU / HEC-18 pier-scour equation</span></h2>
+        <div class="eq">
+d<sub>s</sub> = 2.0 · K1 · K2 · K3 · y1 · (b / y1)<span class="hi">^0.65</span> · Fr1<span class="hi">^0.43</span>
+        </div>
+        <div class="footnote" id="eqFootnote">Plugging in the live values: —</div>
+      </div>
+    </div>
+
+    <!-- RIGHT: controls + readouts -->
+    <div>
+      <div class="panel">
+        <h2>Sensor connection <span class="sub" id="connStatus">simulated data</span></h2>
+        <div class="control-row">
+          <label class="field" for="wsUrl">Bridge server address</label>
+          <select id="wsUrl">
+            <option value="ws://localhost:8765/dashboard">ws://localhost:8765/dashboard</option>
+            <option value="custom">Custom address…</option>
+          </select>
+          <input type="text" id="wsUrlCustom" placeholder="ws://192.168.1.xxx:8765/dashboard" style="display:none; margin-top:8px; width:100%; font-family:'IBM Plex Mono',monospace; font-size:13px; padding:8px 10px; border-radius:3px; border:1px solid var(--line); background:var(--paper); color:var(--ink);">
+        </div>
+        <div class="btn-row">
+          <button class="primary" id="connectBtn">Connect to sensors</button>
+          <button id="disconnectBtn" style="display:none;">Disconnect</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Scenario controls</h2>
+        <div class="control-row">
+          <label class="field" for="foundationSelect">Foundation module</label>
+          <select id="foundationSelect">
+            <option value="shallow">Shallow rural footing — unarmored</option>
+            <option value="pier" selected>Reinforced concrete pier — standard</option>
+            <option value="tetrapod">Armored tetrapod pier — riprap protected</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <label class="field" for="velocitySlider">Target flow velocity <span class="range-value" id="velocityValue">1.8 m/s</span></label>
+          <input type="range" id="velocitySlider" min="0.3" max="4.5" step="0.1" value="1.8">
+        </div>
+        <div class="btn-row">
+          <button class="primary" id="stormBtn">Trigger storm surge</button>
+          <button id="pauseBtn">Pause</button>
+          <button class="danger" id="resetBtn">Reset</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>Live readouts</h2>
+        <div class="readouts">
+          <div class="readout">
+            <div class="label">Flow velocity</div>
+            <div class="value water"><span id="rVelocity">0.0</span><span class="unit">m/s</span></div>
+          </div>
+          <div class="readout">
+            <div class="label">Sinking depth</div>
+            <div class="value sediment"><span id="rDepth">0.0</span><span class="unit">cm</span></div>
+          </div>
+          <div class="readout">
+            <div class="label">Structural tilt</div>
+            <div class="value"><span id="rTilt">0.00</span><span class="unit">°</span></div>
+          </div>
+          <div class="readout">
+            <div class="label">Froude number</div>
+            <div class="value"><span id="rFroude">0.00</span><span class="unit">Fr1</span></div>
+          </div>
+        </div>
+        <div class="readout" style="margin-top:12px;">
+          <div class="label">Safety margin (embedment remaining)</div>
+          <div class="value" id="rMargin">— <span class="unit">cm</span></div>
+          <div class="safety-bar"><div class="safety-fill" id="marginBar"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- foundation presets ----------
+  // b: pier width (m), embed: embedment depth (cm), K1/K2/K3: CSU correction factors
+  const PRESETS = {
+    shallow:  { label: "Shallow rural footing",     b: 0.6, embed: 45,  K1: 1.10, K2: 1.0, K3: 1.10 },
+    pier:     { label: "Reinforced concrete pier",  b: 1.0, embed: 100, K1: 1.00, K2: 1.0, K3: 1.00 },
+    tetrapod: { label: "Armored tetrapod pier",     b: 1.4, embed: 180, K1: 0.90, K2: 1.0, K3: 0.85 },
+  };
+  const FLOW_DEPTH_Y1 = 1.2; // m, fixed channel flow depth for the flume scenario
+  const G = 9.81;
+
+  function computeScour(V, y1, preset) {
+    const Fr1 = V / Math.sqrt(G * y1);
+    const ds_m = 2.0 * preset.K1 * preset.K2 * preset.K3 * y1 *
+                 Math.pow(preset.b / y1, 0.65) * Math.pow(Fr1, 0.43);
+    return { ds_cm: ds_m * 100, Fr1 };
+  }
+
+  // ---------- state ----------
+  let foundationKey = "pier";
+  let targetVelocity = 1.8;
+  let velocity = 0.2;         // smoothed, what the "sensor" reports
+  let measuredDepth = 0;      // smoothed sinking depth, cm
+  let t = 0;
+  let running = true;
+  let history = []; // {t, velocity, depth}
+  const MAX_POINTS = 120;
+  let stormUntil = 0;
+
+  // ---------- live sensor connection ----------
+  let ws = null;
+  let liveMode = false;
+  let latestLive = null; // {velocity, depth_cm, tilt_deg}
+
+  // ---------- DOM ----------
+  const el = {
+    canvas: document.getElementById("chartCanvas"),
+    statusText: document.getElementById("statusText"),
+    banner: document.getElementById("banner"),
+    bannerDetail: document.getElementById("bannerDetail"),
+    foundationSelect: document.getElementById("foundationSelect"),
+    velocitySlider: document.getElementById("velocitySlider"),
+    velocityValue: document.getElementById("velocityValue"),
+    stormBtn: document.getElementById("stormBtn"),
+    pauseBtn: document.getElementById("pauseBtn"),
+    resetBtn: document.getElementById("resetBtn"),
+    rVelocity: document.getElementById("rVelocity"),
+    rDepth: document.getElementById("rDepth"),
+    rTilt: document.getElementById("rTilt"),
+    rFroude: document.getElementById("rFroude"),
+    rMargin: document.getElementById("rMargin"),
+    marginBar: document.getElementById("marginBar"),
+    eqFootnote: document.getElementById("eqFootnote"),
+    wsUrl: document.getElementById("wsUrl"),
+    wsUrlCustom: document.getElementById("wsUrlCustom"),
+    connectBtn: document.getElementById("connectBtn"),
+    disconnectBtn: document.getElementById("disconnectBtn"),
+    connStatus: document.getElementById("connStatus"),
+  };
+
+  el.wsUrl.addEventListener("change", () => {
+    el.wsUrlCustom.style.display = el.wsUrl.value === "custom" ? "block" : "none";
+  });
+
+  function currentWsAddress() {
+    return el.wsUrl.value === "custom" ? el.wsUrlCustom.value.trim() : el.wsUrl.value;
+  }
+
+  el.connectBtn.addEventListener("click", () => {
+    const address = currentWsAddress();
+    if (!address) return;
+    try {
+      ws = new WebSocket(address);
+    } catch (err) {
+      el.connStatus.textContent = "invalid address";
+      return;
+    }
+    el.connStatus.textContent = "connecting…";
+
+    ws.onopen = () => {
+      liveMode = true;
+      reset();
+      el.connStatus.textContent = "live — reading sensors";
+      el.connectBtn.style.display = "none";
+      el.disconnectBtn.style.display = "block";
+      el.velocitySlider.disabled = true;
+      el.stormBtn.disabled = true;
+    };
+    ws.onmessage = (event) => {
+      try {
+        latestLive = JSON.parse(event.data);
+      } catch (e) { /* ignore malformed packet */ }
+    };
+    ws.onclose = () => {
+      liveMode = false;
+      el.connStatus.textContent = "disconnected — showing simulated data";
+      el.connectBtn.style.display = "block";
+      el.disconnectBtn.style.display = "none";
+      el.velocitySlider.disabled = false;
+      el.stormBtn.disabled = false;
+    };
+    ws.onerror = () => {
+      el.connStatus.textContent = "connection failed — check bridge server & address";
+    };
+  });
+
+  el.disconnectBtn.addEventListener("click", () => {
+    if (ws) ws.close();
+  });
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function reset() {
+    t = 0;
+    velocity = 0.2;
+    measuredDepth = 0;
+    history = [];
+    stormUntil = 0;
+    el.banner.classList.remove("live");
+  }
+
+  el.foundationSelect.addEventListener("change", (e) => {
+    foundationKey = e.target.value;
+    reset();
+  });
+  el.velocitySlider.addEventListener("input", (e) => {
+    targetVelocity = parseFloat(e.target.value);
+    el.velocityValue.textContent = targetVelocity.toFixed(1) + " m/s";
+  });
+  el.stormBtn.addEventListener("click", () => {
+    stormUntil = t + 18; // 18s surge
+  });
+  el.pauseBtn.addEventListener("click", () => {
+    running = !running;
+    el.pauseBtn.textContent = running ? "Pause" : "Resume";
+  });
+  el.resetBtn.addEventListener("click", reset);
+
+  // ---------- simulation tick ----------
+  function tick() {
+    if (!running) return;
+    t += 1;
+
+    const preset = PRESETS[foundationKey];
+    let tilt;
+
+    if (liveMode && latestLive) {
+      // real sensor readings from the ESP32, relayed through the bridge server
+      velocity = latestLive.velocity ?? velocity;
+      measuredDepth = latestLive.depth_cm ?? measuredDepth;
+      tilt = latestLive.tilt_deg ?? 0;
+    } else {
+      const surging = t < stormUntil;
+      const effectiveTarget = surging ? Math.min(4.5, targetVelocity + 1.6) : targetVelocity;
+
+      // smooth velocity toward target with slight sensor noise
+      velocity += (effectiveTarget - velocity) * 0.18 + (Math.random() - 0.5) * 0.04;
+      velocity = Math.max(0, velocity);
+
+      const predicted = computeScour(velocity, FLOW_DEPTH_Y1, preset);
+      // measured depth eases toward the predicted scour depth (telemetry lag) + noise
+      measuredDepth += (predicted.ds_cm - measuredDepth) * 0.06 + (Math.random() - 0.5) * 0.15;
+      measuredDepth = Math.max(0, measuredDepth);
+      tilt = Math.max(0, (measuredDepth / preset.embed) * 6.5 + (Math.random() - 0.5) * 0.3);
+    }
+
+    const { ds_cm, Fr1 } = computeScour(velocity, FLOW_DEPTH_Y1, preset);
+    const margin = preset.embed - measuredDepth;
+
+    history.push({ t, velocity, depth: measuredDepth });
+    if (history.length > MAX_POINTS) history.shift();
+
+    // ---------- update readouts ----------
+    el.rVelocity.textContent = velocity.toFixed(2);
+    el.rDepth.textContent = measuredDepth.toFixed(1);
+    el.rTilt.textContent = tilt.toFixed(2);
+    el.rFroude.textContent = Fr1.toFixed(2);
+    el.rMargin.innerHTML = margin.toFixed(1) + ' <span class="unit">cm</span>';
+
+    const pct = Math.max(0, Math.min(100, (margin / preset.embed) * 100));
+    el.marginBar.style.width = pct + "%";
+    if (pct > 40) el.marginBar.style.background = cssVar("--water");
+    else if (pct > 15) el.marginBar.style.background = cssVar("--sediment");
+    else el.marginBar.style.background = cssVar("--alert");
+
+    el.eqFootnote.innerHTML = `With V = ${velocity.toFixed(2)} m/s, y1 = ${FLOW_DEPTH_Y1.toFixed(1)} m, b = ${preset.b.toFixed(1)} m on the <strong>${preset.label}</strong> &nbsp;→&nbsp; predicted scour depth d<sub>s</sub> ≈ <strong style="color:var(--sediment)">${ds_cm.toFixed(1)} cm</strong> against ${preset.embed} cm of embedment.`;
+
+    el.statusText.textContent = (running ? "Simulation running · t = " : "Paused · t = ") + t + "s";
+
+    if (margin <= 0) {
+      el.banner.classList.add("live");
+      el.bannerDetail.textContent = `${preset.label} — measured sinking depth (${measuredDepth.toFixed(1)} cm) has exceeded the ${preset.embed} cm embedment. Structural collapse risk is imminent.`;
+    } else if (margin > preset.embed * 0.18) {
+      el.banner.classList.remove("live");
+    }
+
+    drawChart(preset);
+  }
+
+  // ---------- chart ----------
+  function drawChart(preset) {
+    const canvas = el.canvas;
+    const dpr = window.devicePixelRatio || 1;
+    const cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth;
+    const cssHeight = 280;
+    if (canvas.width !== cssWidth * dpr || canvas.height !== cssHeight * dpr) {
+      canvas.width = cssWidth * dpr;
+      canvas.height = cssHeight * dpr;
+    }
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+    const padL = 40, padR = 46, padT = 14, padB = 26;
+    const plotW = cssWidth - padL - padR;
+    const plotH = cssHeight - padT - padB;
+
+    const line = cssVar("--line");
+    const water = cssVar("--water");
+    const sediment = cssVar("--sediment");
+    const alert = cssVar("--alert");
+    const inkSoft = cssVar("--ink-soft");
+
+    // grid
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 1;
+    ctx.font = "11px IBM Plex Mono, monospace";
+    ctx.fillStyle = inkSoft;
+    const gridRows = 4;
+    for (let i = 0; i <= gridRows; i++) {
+      const y = padT + (plotH / gridRows) * i;
+      ctx.beginPath();
+      ctx.moveTo(padL, y);
+      ctx.lineTo(padL + plotW, y);
+      ctx.stroke();
+    }
+
+    if (history.length < 2) return;
+
+    const maxV = Math.max(4.5, ...history.map(p => p.velocity + 0.5));
+    const maxD = Math.max(preset.embed * 1.15, ...history.map(p => p.depth + 5));
+    const tMin = history[0].t, tMax = history[history.length - 1].t;
+
+    function x(pt) { return padL + ((pt - tMin) / Math.max(1, tMax - tMin)) * plotW; }
+    function yV(v) { return padT + plotH - (v / maxV) * plotH; }
+    function yD(d) { return padT + plotH - (d / maxD) * plotH; }
+
+    // axis labels
+    ctx.fillStyle = inkSoft;
+    ctx.textAlign = "left";
+    ctx.fillText(maxV.toFixed(1) + " m/s", 2, padT + 4);
+    ctx.fillText("0", 2, padT + plotH);
+    ctx.textAlign = "right";
+    ctx.fillText(maxD.toFixed(0) + " cm", cssWidth - 4, padT + 4);
+    ctx.fillText("0", cssWidth - 4, padT + plotH);
+
+    // embedment threshold line
+    const embedY = yD(preset.embed);
+    ctx.strokeStyle = alert;
+    ctx.globalAlpha = 0.55;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, embedY);
+    ctx.lineTo(padL + plotW, embedY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // velocity line
+    ctx.beginPath();
+    ctx.strokeStyle = water;
+    ctx.lineWidth = 2;
+    history.forEach((p, i) => {
+      const px = x(p.t), py = yV(p.velocity);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // depth line
+    ctx.beginPath();
+    ctx.strokeStyle = sediment;
+    ctx.lineWidth = 2;
+    history.forEach((p, i) => {
+      const px = x(p.t), py = yD(p.depth);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+
+    // depth fill
+    ctx.lineTo(x(history[history.length - 1].t), padT + plotH);
+    ctx.lineTo(x(history[0].t), padT + plotH);
+    ctx.closePath();
+    ctx.fillStyle = cssVar("--sediment-fill");
+    ctx.fill();
+  }
+
+  setInterval(tick, 1000);
+  drawChart(PRESETS[foundationKey]);
+  window.addEventListener("resize", () => drawChart(PRESETS[foundationKey]));
+})();
+</script>
+</body>
+</html>
